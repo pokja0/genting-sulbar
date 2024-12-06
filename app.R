@@ -6,12 +6,14 @@ library(dplyr)
 library(leaflet)
 library(sf)
 library(waiter)
+library(collapse)
 
-rekap_air_empat_t <- as.data.table(fst::read.fst("data/rekap_sasaran_air_empat_t.fst"))
-rekap_desa_verval_krs <- as.data.table(read.fst("data/rekap_desa_verval_krs.fst"))
+rekap_jamban <- as.data.table(read_fst("data/rekap_sasaran_jamban.fst"))
+rekap_air_empat_t <- as.data.table(fst::read_fst("data/rekap_sasaran_air_empat_t.fst"))
+rekap_desa_verval_krs <- as.data.table(read_fst("data/rekap_desa_verval_krs.fst"))
 
 #sasaran_genting <- fst::read_fst("DATASET KRS SASARAN GENTING/bnba_keluarga_genting_sulawesi barat.fst")
-verval_krs_peta <- as.data.table(fst::read.fst("data/verval_krs_dashboard_peta.fst"))
+verval_krs_peta <- as.data.table(fst::read_fst("data/verval_krs_dashboard_peta.fst"))
 
 # # Membaca shapefile peta desa
 # peta_desa_646 <- st_read("BATAS_DESA_SULBAR/BATAS_DESA__SULAWESI_BARAT.shp") %>%
@@ -27,7 +29,7 @@ ui <- dashboardPage(
   dashboardHeader(title = "Basic dashboard"),
   dashboardSidebar(
     selectInput(
-      "jenis_sasaran", label = "Pilih Data", choices = c("Semua", "Sumber Air + 4T")
+      "jenis_sasaran", label = "Pilih Data", choices = c("Semua", "Jamban", "Sumber Air + 4T")
     ),
     selectInput(
       "kabupaten", label = "Pilih Kabupaten", choices = NULL
@@ -54,6 +56,8 @@ server <- function(input, output, session) {
       pilihan_kab = c("SEMUA KABUPATEN", unique(rekap_desa_verval_krs$nama_kabupaten))
     } else if(input$jenis_sasaran == "Sumber Air + 4T"){
       pilihan_kab = c("SEMUA KABUPATEN", unique(rekap_air_empat_t$nama_kabupaten))
+    } else if(input$jenis_sasaran == "Jamban"){
+      pilihan_kab = c("SEMUA KABUPATEN", unique(rekap_jamban$nama_kabupaten))
     }
     
     updateSelectInput(session, "kabupaten",
@@ -67,6 +71,8 @@ server <- function(input, output, session) {
       dataset = rekap_desa_verval_krs
     } else if(input$jenis_sasaran == "Sumber Air + 4T"){
       dataset = rekap_air_empat_t
+    } else if(input$jenis_sasaran == "Jamban"){
+      dataset = rekap_jamban
     }
     
     if(input$kabupaten == "SEMUA KABUPATEN"){
@@ -86,7 +92,14 @@ server <- function(input, output, session) {
   value_filter_kab <- reactiveVal()
   
   observeEvent(input$cari, {
-    dataset = as.data.table(rekap_desa_verval_krs)
+    if(input$jenis_sasaran == "Semua"){
+      dataset = rekap_desa_verval_krs
+    } else if(input$jenis_sasaran == "Sumber Air + 4T"){
+      dataset = rekap_air_empat_t
+    } else if(input$jenis_sasaran == "Jamban"){
+      dataset = rekap_jamban
+    }
+    dataset = as.data.table(dataset)
     kondisi_input = input$kabupaten
     
     # Cek apakah yang dipilih adalah 'SEMUA KABUPATEN' atau satu kabupaten tertentu
@@ -103,7 +116,14 @@ server <- function(input, output, session) {
   
   # Reactive untuk mendapatkan daftar kecamatan per kabupaten
   daftar_kecamatan_reaktif <- reactive({
-    dataset = as.data.table(rekap_desa_verval_krs)
+    if(input$jenis_sasaran == "Semua"){
+      dataset = rekap_desa_verval_krs
+    } else if(input$jenis_sasaran == "Sumber Air + 4T"){
+      dataset = rekap_air_empat_t
+    } else if(input$jenis_sasaran == "Jamban"){
+      dataset = rekap_jamban
+    }
+    dataset = as.data.table(dataset)
     filter_kabupaten = value_filter_kab()  # Mengambil filter kabupaten yang telah diset
     
     # Jika filter kabupaten ada, ambil kecamatan yang sesuai
@@ -145,7 +165,7 @@ server <- function(input, output, session) {
                              by.x = c("KECAMATAN","DESA_KELUR"), by.y = c("nama_kecamatan", "nama_kelurahan"), 
                              all.x = TRUE, all.y = FALSE)
       peta_desa_646 <- peta_desa_646[, c(1:2, 7:8, 164:167)] |>
-        mutate(sasaran_prioritas_genting_1 = ifelse(is.na(sasaran_prioritas_genting_1), 0, sasaran_prioritas_genting_1))
+        fmutate(sasaran_prioritas_genting_1 = ifelse(is.na(sasaran_prioritas_genting_1), 0, sasaran_prioritas_genting_1))
       
     } else if(input$jenis_sasaran == "Sumber Air + 4T"){
       dataset = as.data.table(rekap_air_empat_t)
@@ -154,9 +174,16 @@ server <- function(input, output, session) {
             by.x = c("KECAMATAN","DESA_KELUR"), by.y = c("nama_kecamatan", "nama_kelurahan"), 
             all.x = TRUE, all.y = FALSE)
       peta_desa_646 <- peta_desa_646[, c(1:2, 7:8, 164:167)] |>
-        mutate(sasaran_prioritas_genting_1 = ifelse(is.na(sasaran_prioritas_genting_1), 0, sasaran_prioritas_genting_1))
-      
-      }
+        fmutate(sasaran_prioritas_genting_1 = ifelse(is.na(sasaran_prioritas_genting_1), 0, sasaran_prioritas_genting_1))
+    } else if(input$jenis_sasaran == "Jamban"){
+      dataset = as.data.table(rekap_jamban)
+      # Menggabungkan data dengan peta desa
+      peta_desa_646 <- merge(peta_desa_646, dataset, 
+                             by.x = c("KECAMATAN","DESA_KELUR"), by.y = c("nama_kecamatan", "nama_kelurahan"), 
+                             all.x = TRUE, all.y = FALSE)
+      peta_desa_646 <- peta_desa_646[, c(1:2, 7:8, 164:167)] |>
+        fmutate(sasaran_prioritas_genting_1 = ifelse(is.na(sasaran_prioritas_genting_1), 0, sasaran_prioritas_genting_1))
+    }
   })
   
   data_titik <- eventReactive(input$cari,{
@@ -166,19 +193,32 @@ server <- function(input, output, session) {
       
     } else if(input$jenis_sasaran == "Sumber Air + 4T"){
       data_titik <- verval_krs_peta %>%
-        filter(
-          kondisi_sumber_air_minum %in% c(2),
-          kondisi_fasilitas_bab %in% c(1),
+        fsubset(
+          kondisi_sumber_air_minum %in% c(2) &
+          kondisi_fasilitas_bab %in% c(1) &
           terlalu_muda == 2 |
             terlalu_tua == 2 |
             terlalu_dekat == 2 |
-            terlalu_banyak == 2,
-          !is.na(longitude),
+            terlalu_banyak == 2 &
+          !is.na(longitude) &
           !is.na(latitude)
         ) %>%
-        mutate(longitude = as.numeric(longitude),
+        fmutate(longitude = as.numeric(longitude),
                latitude = as.numeric(latitude))
-      
+    } else if(input$jenis_sasaran == "Jamban"){
+      data_titik <- verval_krs_peta %>%
+        fsubset(
+          kondisi_sumber_air_minum == 1 &
+          kondisi_fasilitas_bab == 2 &
+          terlalu_muda %in% c(1,3) &
+          terlalu_tua %in% c(1,3) &
+          terlalu_dekat %in% c(1,3) &
+          terlalu_banyak %in% c(1,3) &
+          !is.na(longitude) &
+          !is.na(latitude)
+        ) |>
+        fmutate(longitude = as.numeric(longitude),
+                latitude = as.numeric(latitude))
     }
   })
   
@@ -186,7 +226,7 @@ server <- function(input, output, session) {
     # Tentukan palet warna berdasarkan data
     peta_desa_646 <- data_peta()
     peta_desa_646 <- peta_desa_646 |>
-      filter(KAB_KOTA %in% value_filter_kab() & 
+      fsubset(KAB_KOTA %in% value_filter_kab() & 
                            KECAMATAN %in% value_filter_kec())
     pal <- colorNumeric(
       palette = "YlOrRd",  # Palet warna (contoh: Kuning-Oranye-Merah)
@@ -200,11 +240,23 @@ server <- function(input, output, session) {
     
     data_titik <- data_titik()
     data_titik <-  data_titik%>%
-      filter(nama_kabupaten %in% value_filter_kab() & 
+      fsubset(nama_kabupaten %in% value_filter_kab() & 
                nama_kecamatan %in% value_filter_kec())
     
+    poput_titik <- sprintf(
+      "Kecamatan <strong>%s</strong> <br/> Desa/Kelurahan <strong>%s</strong><br/> KRS: %g ",
+      data_titik$nama_kecamatan, data_titik$nama_kecamatan_kelurahan, data_titik$nama_kelurahan
+    ) %>% lapply(htmltools::HTML)
+    
     leaflet(data = peta_desa_646) %>%
-      addProviderTiles(providers$Esri.WorldImagery) %>%
+      addProviderTiles(providers$OpenTopoMap, group = "Topografi") %>%
+      addProviderTiles(providers$OpenStreetMap, group = "Alamat Jalan") %>%
+      addProviderTiles(providers$Esri.WorldImagery, group = "Citra Satelit") %>%
+      addProviderTiles(providers$Esri.WorldTopoMap, group = "Topo dan Jalan") %>%
+      addLayersControl(
+        baseGroups = c("Topografi", "Alamat Jalan", "Citra Satelit", "Topo dan Jalan"),
+        options = layersControlOptions(collapsed = FALSE)
+      ) %>%
       addPolygons(
         fillColor = ~pal(sasaran_prioritas_genting_1),
         weight = 1,
@@ -223,7 +275,7 @@ server <- function(input, output, session) {
         pal = pal,
         values = ~sasaran_prioritas_genting_1,
         position = "bottomright",
-        title = "Population Density"
+        title = "Jumlah KRS"
       ) %>%
       addMarkers(lng = data_titik$longitude, lat = data_titik$latitude, # Longitude dan Latitude
                  popup = data_titik$kode_keluarga, # Popup yang menampilkan nama lokasi
