@@ -243,10 +243,10 @@ server <- function(input, output, session) {
       fsubset(nama_kabupaten %in% value_filter_kab() & 
                nama_kecamatan %in% value_filter_kec())
     
-    poput_titik <- sprintf(
-      "Kecamatan <strong>%s</strong> <br/> Desa/Kelurahan <strong>%s</strong><br/> KRS: %g ",
-      data_titik$nama_kecamatan, data_titik$nama_kecamatan_kelurahan, data_titik$nama_kelurahan
-    ) %>% lapply(htmltools::HTML)
+    # poput_titik <- sprintf(
+    #   "Kecamatan <strong>%s</strong> <br/> Desa/Kelurahan <strong>%s</strong><br/> Kode: %g ",
+    #   data_titik$nama_kecamatan, data_titik$nama_kecamatan_kelurahan, data_titik$kode_keluarga
+    # ) %>% lapply(htmltools::HTML)
     
     leaflet(data = peta_desa_646) %>%
       addProviderTiles(providers$OpenTopoMap, group = "Topografi") %>%
@@ -278,7 +278,11 @@ server <- function(input, output, session) {
         title = "Jumlah KRS"
       ) %>%
       addMarkers(lng = data_titik$longitude, lat = data_titik$latitude, # Longitude dan Latitude
-                 popup = data_titik$kode_keluarga, # Popup yang menampilkan nama lokasi
+                 popup = ~paste(
+                   "<b>Kecamatan:</b>", data_titik$nama_kecamatan, "<br>",
+                   "<b>Desa/Kel:</b>", data_titik$nama_kelurahan, "<br>",
+                   "<b>Kode:</b>", data_titik$kode_keluarga, "<br>"
+                 ), # Popup yang menampilkan nama lokasi
                  clusterOptions = markerClusterOptions() # Mengaktifkan clustering
       )
   })
